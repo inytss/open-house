@@ -1,0 +1,215 @@
+---
+title: "Analisis Vaksin COVID-19"
+author: "Inayatus"
+date: "5/18/2021"
+output: 
+  html_document:
+    toc: true
+    toc_float: 
+      collapsed: true
+    theme: united
+    highlight: zenburn
+    df_print: paged
+    css: style.css
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      fig.align = "center",
+                      comment = "#>")
+options(scipen = 99)
+rm(list = ls())
+```
+
+# Setup Library
+
+```{r}
+# wraingling and visualizing
+library(tidyverse)
+library(lubridate)
+library(tidyr)
+library(stringr)
+
+# visualizing
+library(leaflet)
+library(plotly)
+library(glue)
+library(treemap)
+library(highcharter)
+```
+
+# Studi Kasus
+
+Seperti yang sudah kita ketahui, tahun 2020 merupakan tahun yang cukup membuat kita semua merasa terkejut, sedih, marah, pasrah dikarenakan adanya pandemi dari virus Sars-Cov-2 atau yang lebih sering kita kenal sebagai COVID-19. Pandemi ini sangat menggemparkan dunia dengan penyebaran virusnya yang sangat cepat dan masif menyebabkan jutaan orang sakit, meninggal, harus melakukan karantina diri, dan bahkan miliyaran orang harus mengalami perubahan pada hidupnya, baik dalam bersosial, bekerja, bahkan beraktifitas seperti biasanya. Walaupun pandemi ini masih terus berlangsung, para ilmuan dan peneliti dalam satu tahun terakhir ini telah mempu menemukan **vaksin** yang telah melalui beberapa uji klinis - terima kasih. 
+
+Terdapat beberapa jenis vaksin yang telah di uji dan telah di distribusikan oleh beberapa negara, termasuk Indonesia. Pada analisis kali ini, kita akan melihat bagaimana perkembangan proses vaksinasi di dunia terutama di Indonesia. Vaksin apa saja yang paling banyak digunakan di seluruh dunia? Vaksin apa yang digunakan oleh Indonesia? Negara mana yang menggunakan jenis vaksin yang sama dengan Indonesia? Negara mana yang sudah hampir menyelesaikan proses vaksinasi bagi para penduduknya dan bagaimana progres distribusi vaksin di Indonesia?
+
+Beberapa pertanyaan tersebut akan kita jawab. Untuk menjawab pertanyaan tersebut, disini kita akan menggunakan data vaksin yang bersumber dari [Kaggle: COVID-19 World Vaccination Progress](https://www.kaggle.com/gpreda/covid-world-vaccination-progress) dan data orisinil diperoleh dari [Our World in Data](https://ourworldindata.org/coronavirus) serta repositori Github [COVID-19](https://github.com/owid/covid-19-data).
+
+# Import Data
+
+Kita akan coba melakukan import data `country_vaccinations.csv` yang tersimpan dalam folder `data_input`. Dikarenakan file dalam bentuk `.csv`, kita bisa menggunakan fungsi `read.csv()`.
+```{r}
+vaksin <- read.csv("data_input/country_vaccinations.csv")
+head(vaksin)
+```
+
+Data tersebut menyimpan informasi sebagai berikut:
+
+- **country** - negara yang disedikan informasi mengenai vaksin;
+- **iso_code** - kode negara;
+- **date** - tanggal data tersebut dimasukkan; untuk beberapa tanggal yang ada merupakan informasi vaksinasi harian, untuk yang lainnya hanya total vaksinasi yang dilakukan;
+- **total_vaccinations** - angka mutlak total vaksinasi yang dilakukan oleh negara tsb;
+- **people_vaccinated** - seseorang, tergantung pada skema imunisasi, akan menerima satu atau lebih (biasanya 2) vaksin; Pada saat tertentu, jumlah vaksinasi mungkin lebih banyak dari jumlah orang ;
+- **people_fully_vaccinated** - jumlah orang yang menerima seluruh rangkaian imunisasi menurut skema imunisasi (biasanya 2); pada saat tertentu, mungkin ada sejumlah orang yang menerima satu vaksin dan sejumlah lain (lebih kecil) orang yang menerima semua vaksin dalam skema ;
+- **daily_vaccinations_raw** dan **daily_vaccinations** - untuk entri data tertentu, jumlah vaksinasi untuk tanggal/negara tersebut;
+- **total_vaccinations_per_hundred** - rasio (dalam persen) antara jumlah yang telah divaksin dengan total populasi saat ini pada suatu negara;
+- **people_vaccinated_per_hundred** - rasio (dalam persen) antara total penduduk yang diimunisasi dengan total populasi saat ini pada suatu negara;
+- **people_fully_vaccinated_per_hundred** - rasio (dalam persen) antara penduduk yang sudah diimunisasi penuh dengan total populasi saat ini pada suatu negara;
+- **daily_vaccinations_per_million** - rasio (dalam ppm/people per million) antara angka vaksinasi dengan total populasi saat ini pada suatu negara;
+- **vaccines** - vaksin yang digunakan;
+- **source_name** - sumber informasi (otoritas nasional, organisasi internasional, organisasi lokal, dll.);
+* **source_website** - sumber website
+
+# Data Preprocessing
+
+Tahapan yang cukup penting yaitu melakukan pembersihan data agar dapat digunakan dalam analisis lanjutan.
+
+## Mengubah Tipe Data
+
+Pertama kita cek terlebih dahulu tipe data masing-masing kolom pada data `vaksin`.
+```{r}
+vaksin %>% 
+  glimpse()
+```
+
+Pada data `vaksin`, terdapat 2 jenis tipe data yang disajikan yaitu **numeric** (`dbl`) dan **character** (`chr`). Namun apabila kita teliti lebih dalam, setiap kolom pada data `vaksin` ada yang belum memiliki tipe data yang sesuai. Kolom mana yang perlu diubah?
+
+* `date` -> tipe data **date**
+* `country`, `iso_code`, `source_name` -> tipe data **factor**
+
+```{r}
+vaksin_clean <- vaksin %>% 
+  mutate(date = ymd(date),
+         across(.cols = c(country, iso_code, source_name), .fns = as.factor))
+head(vaksin_clean)
+```
+
+## Cek Missing Value
+
+Hal yang paling krusial dalam melakukan analisis data yaitu terdapatnya *missing value* atau nilai kosong. Sekilas jika kita perhatikan terdapat missing value pada beberapa kolom, namun kita tidak tahu kolom mana yang paling banyak terdapat missing valuenya, dan berapa proporsi missing value yang ada pada masing-masing kolom.
+
+```{r}
+df_agg <- vaksin_clean %>% 
+  is.na() %>% 
+  colSums() %>% 
+  as.table() %>% 
+  as.data.frame() %>% 
+  mutate(Freq = round(Freq/nrow(vaksin_clean)*100,2)) 
+df_agg %>% 
+  arrange(desc(Freq))
+```
+
+```{r echo=FALSE}
+p1 <- df_agg %>% 
+  ggplot(aes(Freq, reorder(Var1, Freq), text = glue("Persentase Missing : {Freq}%"))) +
+  geom_col(aes(fill = Freq), show.legend = F)+
+  scale_fill_gradient(low = "#82bdb6", high = "#093573")+
+  labs(y = NULL, title = "Persentase Missing Value per Kolom", caption = "Source: Our World Data")+
+  theme_minimal()
+ggplotly(p1, tooltip = "text") 
+```
+
+Dari sini kita tahu bahwa beberapa kolom memiliki missing value lebih dari 50%, kita bisa menghapus kolom tersebut karena terlalu banyak yang missing. Untuk kolom yang memiliki missing value lebih sedikit bisa kita imputasi sesuai dengan keputusan bisnis atau tetap kita biarkan missing apabila tidak kita perlukan kolom tersebut.
+
+Pada analisis ini kita akan memilih beberapa kolom yang diperlukan saja untuk analisis diantaranya `country`, `date`, `vacciness`, `daily_vaccinations`, `total_vaccinations`, `people_vaccinated`, `daily_vaccinations_raw`, `people_vaccinated_per_hundred`, dan `people_fully_vaccinated`. Dikarenakan data tersusun per hari, oleh karena itu menyebabkan beberapa data missing dikarenakan memang tidak terdapat kegiatan vaksinasi. Beberapa kolom yang terdapat missing value akan kita isi dengan angka 0.
+
+```{r}
+vaksin_clean <- vaksin_clean %>% 
+  select(country, date, total_vaccinations, daily_vaccinations, daily_vaccinations_raw, people_vaccinated, people_fully_vaccinated, people_fully_vaccinated_per_hundred, vaccines) %>% 
+  mutate_if(is.numeric, ~replace_na(., 0)) 
+```
+
+
+# Analisis Data Vaksin
+
+Sebelum melangkah lebih jauh, kita akan cari tahu dulu, data yang kita miliki berada pada rentang waktu kapan.
+
+```{r}
+vaksin_clean %>% 
+  pull(date) %>% 
+  range()
+```
+
+Data vaksin yang kita miliki memiliki rentang waktu 2 Desember 2020 - 13 Mei 2021. 
+
+## Jenis Vaksin yang Digunakan Seluruh Dunia
+
+Hinggal 15 Mei 2021, para peneliti telah melakukan pengujian 90 vaksin pada tenaga kesehatan, dan 27 vaksin sudah mencapai tahapan final test. Terdapat 77 vaksin praklinis sedang dalam pengujian pada hewan. [Sumber: The New York Times](https://www.nytimes.com/interactive/2020/science/coronavirus-vaccine-tracker.html).
+
+```{r}
+vaksin_per_country <- vaksin_clean %>% 
+  distinct(country, vaccines)
+
+vac <- unlist(strsplit(vaksin_per_country$vaccines, ", "))
+tot_vaksin <- as.data.frame(vac) %>% 
+  count(vac) %>% 
+  arrange(desc(n))
+tot_vaksin
+```
+
+```{r echo=FALSE, include=FALSE}
+tm <- treemap(tot_vaksin, index = "vac", vSize = "n", palette = "YlGnBu", title = "Jenis Vaksin yang Digunakan di Dunia")
+```
+
+
+```{r echo=FALSE}
+hctreemap(tm, allowDrillToNode = TRUE) %>% 
+   hc_title(text = "Jenis Vaksin yang Digunakan di Dunia") %>%
+  hc_exporting(enabled = TRUE) 
+```
+
+Hingga 13 Mei 2021, 5 jenis vaksin yang paling banyak digunakan oleh banyak negara di dunia yaitu vaksin Oxford/AstraZaneca, Pfizer/BioNTech, Modernam, Sinopharm, dan Sputnik V. Indonesia sendiri sudah menggunakan vaksin Sinovac yang berada pada urutan ke-6 jenis vaksin yang paling sering digunakan oleh beberapa negara. Namun, selain Sinovac, Indonesia juga sudah menggunakan jenis vaksin dari Astrazeneca.
+
+```{r}
+# conditional subsetting
+vaksin_clean %>% 
+  filter(country == "Indonesia") %>% 
+  distinct(country, vaccines)
+```
+
+Kedua jenis vaksin ini telah digunakan oleh beberapa negara. Berikut ini beberapa negara yang menggunakan jenis vaksin yang sama dengan Indonesia.
+
+```{r}
+# conditional subsetting
+vaksin_clean %>% 
+  filter(str_detect(vaccines, "AstraZeneca|Sinovac")) %>% 
+  distinct(country, vaccines)
+```
+
+Lalu, bagaimana perkembangan distribusi vaksin yang dilakukan seluruh negara per harinya terutama di Indonesia sendiri? 
+
+```{r}
+plot_vaksin <- ggplot(data = vaksin_clean, aes(x = date, y = daily_vaccinations, text = glue("{country}
+                                                                                             Tanggal: {date}
+                                                                                             Jumlah vaksinasi per hari: {scales::comma(daily_vaccinations)}")))+
+  geom_line(aes(group = country), col = "grey")+
+  geom_line(data = vaksin_clean %>% filter(country == "Indonesia"), aes(x = date, y = daily_vaccinations, group = 1),
+            col = "firebrick")+
+  scale_y_continuous(labels = scales::comma)+
+  labs(title = "Perkembangan Vaksin per Hari", y = "Vaksin per Hari", x = "Tanggal")+
+  theme_minimal()
+  
+ggplotly(plot_vaksin, tooltip = "text") 
+```
+
+
+# Reference
+
+* [https://www.kaggle.com/michau96/why-is-israel-a-leader-in-vaccination](https://www.kaggle.com/michau96/why-is-israel-a-leader-in-vaccination)
+* [Kaggle: COVID-19 World Vaccination Progress](https://www.kaggle.com/gpreda/covid-world-vaccination-progress) 
+* [Our World in Data](https://ourworldindata.org/coronavirus)  
+* [COVID-19 Github Repository](https://github.com/owid/covid-19-data).
+

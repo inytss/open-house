@@ -1,0 +1,240 @@
+---
+title: "'Avocado Price' Analisis"
+author: "Inayatus"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+    number_sections: true
+    df_print: paged
+    theme: united
+    highlight: zenburn
+    code_folding: hide
+    css: style.css
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      comment = "#>")
+```
+<center>
+```{r echo=FALSE}
+knitr::include_graphics("image/avo.gif")
+```
+</center>
+
+# Studi Kasus {.tabset}
+
+Para millenials di US sangat menyukai avocado toast[^1]. Dikarenakan sangat suka dengan avocado, mereka rela membeli avocado dengan harga yang sangat beragam demi memenuhi kebutuhan mereka dan bahkan belum bisa membeli rumah sendiri.
+
+Jika kita berperan sebagai konsumen yang ingin membeli avocado, dimana kita harus membeli avocado dengan **harga ekonomis dan kualitas baik**?
+
+```{r}
+avo <- read.csv("data_input/avocado.csv")
+head(avo)
+```
+
+Deskripsi data:
+
+* `X` : index data
+* `Date` : tanggal observasi
+* `AveragePrice` : rata-rata harga satuan avocado
+* `Total.Volume` : jumlah seluruh avocado yang terjual
+* `X4046` : banyaknya avocado dengan jenis PLU 4046 terjual
+* `X4225` : banyaknya avocado dengan jenis PLU 4225 terjual
+* `X4770` : banyaknya avocado dengan jenis PLU 4770 terjual
+* `Total.Bags` : banyaknya avocado yang terjual pada tas ukuran kecil, besar, dan ekstra besar 
+* `Small.Bags` : banyaknya avocado yang terjual pada tas ukuran kecil
+* `Large.Bags` : banyaknya avocado yang terjual pada tas ukuran besar
+* `XLarge.Bags` : banyaknya avocado yang terjual pada tas ukuran ekstra besar
+* `type` : jenis avocado, konvensional atau organik
+* `year` : tahun
+* `region` : kota tempat observasi
+
+## Library Used
+
+```{r}
+# untuk data wrangling
+library(dplyr)
+library(lubridate)
+
+# untuk visualisasi
+library(ggplot2)
+library(scales)
+library(ggthemes)
+```
+
+# Exploratory Data Analysis
+
+Fungsi dari ekplorasi data analisis ini adalah untuk lebih mengenal dan mengetahui data yang kita miliki seperti apa. Ekplorasi data ini juga dapat membantu untuk menemukan insight pada suatu data.
+
+## Cleansing Data
+
+Pertama, kita akan coba cek pada data `avo` terdapat *missing value* atau tidak. Ternyata data `avo` tidak memiliki *missing value* sama sekali. 
+```{r}
+colSums(is.na(avo))
+```
+
+```{r}
+glimpse(avo)
+```
+
+Tahap selanjutnya kita ingin coba bersihkan datanya dengan beberapa step tahapan yaitu sebagai berikut :
+
+* mengganti format seluruh nama kolom menjadi huruf kecil
+* menyesuaikan tipe data pada kolom yang belum sesuai
+* membuang kolom yang tidak diperlukan
+
+```{r}
+avo <- avo %>% 
+  rename_all(tolower) %>% 
+  mutate(date = ymd(date)) %>% 
+  select(-x)
+head(avo)
+```
+
+## Visualization
+
+```{r echo=FALSE}
+# Predefined personal color schemes (change them at your convenience)
+colorsReBu <- c("#922B21", "#EE865D", "#DDCD5E", "#59BEC4", "#048B9F", "#114676")
+colorsPuYe <- c("#5C374C", "#985277", "#CE6A85", "#FFCF6A", "#FFB742", "#E9692C")
+colorsEarth <- c("#DA4511", "#FFBD00", "#6A953F", "#9A6233", "#D3AE7C", "#307CA1")
+colorsRainbow <- c("#FF8EC8", "#FFDF51", "#46DBDF", "#FF8F46", "#42BAB7", "#DB0000")
+colorsPastels <- c("#FA6E4F", "#F2CF59", "#FB8E7E", "#C5D7C0", "#8EC9BB", "#F8CA9D")
+```
+
+Permasalahan utama yang kita miliki adalah **harga**. Harga selalu terlihat penting saat kita menyukai suatu barang dan ingin membelinya terus menerus. Tentunya sebagai konsumen, kita ingin mendapatkan kualitas barang yang baik namun dengan harga yang ekonomis juga. Oleh karena itu, mari kita perhatikan distribusi dari harga avocado.
+
+```{r}
+avo %>% 
+  ggplot(aes(x = averageprice, )) +
+  geom_density(alpha = 0.5, fill = "#8EC9BB") +
+  ggtitle("Distribusi Harga Avocado") +
+  labs(caption = "Source : Kaggle", x = "", y = "")+
+  scale_x_continuous(labels = unit_format(prefix = "$", scale = 1, unit = "")) +
+  theme_stata()
+```
+
+Jika kita perhatikan dari diagram distribusi harga tersebut, kita melihat variasi harga pada avocado yang dijual. Avocado dengan kisaran harga `$1 - $1.7` sangat mudah ditemukan. Namun dengan harga demikian, tipe avocado seperti apakah yang kita peroleh?
+
+```{r}
+avo %>% 
+  ggplot(aes(y = averageprice, x = type)) +
+  geom_boxplot(aes(fill = type), show.legend = F) +
+  scale_fill_manual(values = c("#FB8E7E", "#C5D7C0")) +
+  scale_y_continuous(labels = unit_format(prefix = "$", scale = 1, unit = "")) +
+  ggtitle("Distribusi Harga Avocado", subtitle = "berdasarkan tipe") +
+  labs(caption = "Source : Kaggle", y = "", x = "") +
+  theme_stata() +
+  theme(axis.text.y = element_text(hjust = 0.5))
+```
+
+Menarik sekali, dengan kisaran harga `$1 - $1.7` kita bahkan sudah bisa mendapatkan avocado organik. 
+
+Pertanyaan selanjutnya adalah, dimana kita bisa membeli avocado dengan kisaran harga tersebut dan dengan kualitas yang baik dalam hal ini kita ingin mendapatkan avocado organik. 
+
+```{r}
+agg_or <- avo %>% 
+  filter(averageprice >= 1 & averageprice <=1.7 & type == "organic") %>% 
+  group_by(region) %>% 
+  summarise(meanprice = mean(averageprice)) %>% 
+  ungroup() %>% 
+  arrange(meanprice) %>% 
+  head(10)
+
+top10_region_or <- agg_or %>% 
+  pull(region)
+
+or_agg <- avo %>% 
+  filter(averageprice >= 1 & averageprice <=1.7 & type == "organic") %>% 
+  filter(region %in% top10_region_or) %>% 
+  group_by(year, region) %>% 
+  summarise(meanprice = mean(averageprice)) %>% 
+  arrange(meanprice) %>% 
+  ungroup()
+```
+
+```{r}
+p <- or_agg %>% 
+  ggplot(aes(x = reorder(region, desc(meanprice)), y = meanprice, 
+             ymin = meanprice-sd(meanprice), 
+           ymax = meanprice+sd(meanprice))) +
+  geom_pointrange(aes(color = as.factor(year)), size = 0.3)+
+  coord_flip() +
+  scale_color_manual(values = colorsPuYe, guide_legend(title = "Tahun")) +
+  ggtitle("Top 10 Rata-rata Harga Avocado Organik Terendah", 
+          subtitle = "Tahun 2015 - 2018") +
+  labs(y = "", x = "", caption = "Source : Kaggle") +
+  theme_stata() +
+  theme(legend.position = "bottom",
+        axis.text.y = element_text(angle = 0))
+p
+```
+
+Ternyata harga avocado organik terendah dapat kita peroleh di Houston, bahkan pada tahun 2018 pun di Houston harga avocado organiknya termasuk rendah yaitu seharga `$1.36`. Pilihan lainnya adalah kita bisa membelinya di Raleigh Detroit dengan rata-rata harga `$1.31`. 
+
+```{r}
+plotly::ggplotly(p, tooltip = "y")
+```
+
+Namun, bagaimana jika kita ingin membeli avocado konvensional? Dimana kah kita harus membeli dengan harga yang rendah?
+
+```{r}
+agg_kon <- avo %>% 
+  filter(averageprice >= 1 & averageprice <=1.7 & type == "conventional") %>% 
+  group_by(region) %>% 
+  summarise(meanprice = mean(averageprice)) %>% 
+  ungroup() %>% 
+  arrange(meanprice) %>% 
+  head(10)
+
+top10_region_kon <- agg_kon %>% 
+  pull(region)
+
+kon_agg <- avo %>% 
+  filter(averageprice >= 1 & averageprice <=1.7 & type == "conventional") %>% 
+  filter(region %in% top10_region_kon) %>% 
+  group_by(year, region) %>% 
+  summarise(meanprice = mean(averageprice)) %>% 
+  ungroup() %>% 
+  arrange(meanprice)
+```
+
+```{r}
+p2 <- kon_agg %>% 
+  ggplot(aes(x = reorder(region, desc(meanprice)), y = meanprice, 
+             ymin = meanprice-sd(meanprice), 
+           ymax = meanprice+sd(meanprice))) +
+  geom_pointrange(aes(color = as.factor(year)), size = 0.3)+
+  coord_flip() +
+  scale_color_manual(values = colorsPuYe, guide_legend(title = "Tahun")) +
+  ggtitle("Top 10 Rata-rata Harga Avocado Konvensional Terendah", 
+          subtitle = "Tahun 2015 - 2018") +
+  labs(y = "", x = "", caption = "Source : Kaggle") +
+  theme_stata() +
+  theme(legend.position = "bottom",
+        axis.text.y = element_text(angle = 0))
+p2
+```
+
+Kita dapat membelinya di West Text New Mexico. Menarik jika dilihat bahwa harga avocado konvensional terendah pada tahun 2018 terdapat pada Columbus dengan rata-rata harganya `$1.03`.
+
+```{r}
+plotly::ggplotly(p2, tooltip = "y")
+```
+
+# Kesimpulan
+
+Hal yang dapat kita simpulkan adalah ketika kita berlaku sebagai konsumen dan kita ingin mendapatkan avocado dengan harga yang rendah, kita memiliki dua pilihan, yaitu organik atau konvensional. Tentunya apabila kita memperhatikan kualitas, kita akan memilih avocado organik dan kita dapat membelinya di Charlotte. Namun jika kita lebih suka jenis avocado konvensional, kita dapat membeli avocado dengan harga yang rendah di San Francisco. 
+
+Ekplorasi data sangatlah penting disini. Melakukan ekplorasi data kita dapat mendapatkan insignt dan informasi dimana kita akan membeli avocado dengan harga yang ekonomis namun dengan kualitas yang baik pula. 
+
+# Reference 
+
+[^1]: [Avocado Price](https://www.kaggle.com/neuromusic/avocado-prices)

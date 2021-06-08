@@ -1,0 +1,40 @@
+.list-group-item.active, .list-group-item.active:hover, .list-group-item.active:focus {
+    z-index: 2;
+    color: #ffffff;
+    background-color: #aab470;
+    border-color: #aab470;
+}
+
+.title, .author, .date {
+  font-family: "Ubuntu";
+  text-align: center;
+  color: #3c4b25;
+}
+
+body {
+  text-align: justify;
+}
+
+a {
+  color: #aab470;
+}
+
+a:hover {
+  color: #4b4527;
+}
+
+h1 {
+  color: #3c4b25;
+}
+
+h2 {
+  color: #7f8a50;
+}
+
+.nav-tabs>li.active>a, .nav-tabs>li.active>a:hover, .nav-tabs>li.active>a:focus {
+    color: #7f8a50;
+    background-color: #ffffff;
+    border: 1px solid #4b4527;
+    border-bottom-color: transparent;
+    cursor: default;
+}
